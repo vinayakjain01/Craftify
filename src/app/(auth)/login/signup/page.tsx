@@ -22,14 +22,22 @@ export default function SignupPage() {
   async function handleSignup() {
     setLoading(true)
     setError('')
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { full_name: fullName } }
     })
     if (error) {
       setError(error.message)
+    } else if (data.session) {
+      // "Confirm email" is off for this project, so signUp() already returns
+      // a live session — go straight to the dashboard instead of a
+      // "check your email" dead end nobody can act on inside an embedded
+      // Shopify iframe (there's no inbox to check from in there).
+      router.push('/dashboard')
     } else {
+      // Confirmation is still required (no session came back) — this is the
+      // only case where "check your email" is actually actionable.
       setSuccess(true)
     }
     setLoading(false)

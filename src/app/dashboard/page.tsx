@@ -53,6 +53,43 @@ export default async function DashboardPage({
     getActiveStore(),
   ])
 
+  // No store connected yet — a merchant who signed in without ever going
+  // through Shopify OAuth (e.g. the review test account) has nothing for the
+  // metric queries below to aggregate. Skip them entirely and point at the
+  // one thing that actually unblocks them, rather than rendering a full
+  // dashboard of all-zero stats.
+  if (storeList.length === 0) {
+    return (
+      <div style={{
+        fontFamily: 'var(--font-sans-family)', color: '#241A3D',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh',
+      }}>
+        <div style={{
+          background: '#FFFFFF', border: '1px solid #E7E2F0', borderRadius: 14,
+          padding: '32px 28px', maxWidth: 440, textAlign: 'center',
+        }}>
+          <h2 style={{ fontFamily: 'var(--font-heading-family)', fontSize: 20, fontWeight: 600, color: '#241A3D', margin: '0 0 8px' }}>
+            Connect your Shopify store
+          </h2>
+          <p style={{ fontSize: 13.5, color: '#6B6280', margin: '0 0 20px' }}>
+            Craftify generates catalog creatives from a connected store&apos;s products.
+            Connect one from Settings to get started.
+          </p>
+          <Link
+            href="/dashboard/settings"
+            style={{
+              display: 'inline-block', background: '#4B2E83', color: '#fff',
+              borderRadius: 10, padding: '10px 20px', fontSize: 13.5, fontWeight: 600,
+              textDecoration: 'none',
+            }}
+          >
+            Connect Shopify store
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
   const supabase = await createClient()
 
   // All metric queries run in parallel — previously 4 sequential calls.

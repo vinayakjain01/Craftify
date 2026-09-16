@@ -68,6 +68,19 @@ export async function middleware(request: NextRequest) {
 
   // Protect dashboard routes — redirect to login if not authenticated
   if (!user && pathname.startsWith('/dashboard')) {
+    // A shop param here means this is an embedded launch that lost its
+    // session (expired, cookie dropped, etc.) — send it through OAuth+
+    // auto-signin again instead of showing the email/password form a
+    // Shopify-launched merchant was never supposed to see.
+    const shop = request.nextUrl.searchParams.get('shop')
+    if (shop) {
+      const installUrl = new URL('/api/shopify/install', request.url)
+      installUrl.searchParams.set('shop', shop)
+      const host = request.nextUrl.searchParams.get('host')
+      if (host) installUrl.searchParams.set('host', host)
+      return NextResponse.redirect(installUrl)
+    }
+
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)

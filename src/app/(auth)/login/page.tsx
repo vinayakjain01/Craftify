@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -9,13 +9,39 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 
+// useSearchParams() requires a Suspense boundary above it during static
+// rendering — otherwise the build bails with "should be wrapped in a
+// suspense boundary" on this exact page.
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
+  )
+}
+
+function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClient()
+
+  // A shop param on THIS page means something upstream (a stale bookmark, a
+  // dropped session mid-flow) landed a Shopify-launched merchant on the email
+  // form instead of completing OAuth — restart it instead of asking for
+  // credentials they were never supposed to need.
+  useEffect(() => {
+    const shop = searchParams.get('shop')
+    if (!shop) return
+    const installUrl = new URL('/api/shopify/install', window.location.origin)
+    installUrl.searchParams.set('shop', shop)
+    const host = searchParams.get('host')
+    if (host) installUrl.searchParams.set('host', host)
+    window.location.href = installUrl.toString()
+  }, [searchParams])
 
   async function handleLogin() {
     setLoading(true)
