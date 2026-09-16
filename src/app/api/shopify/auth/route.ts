@@ -72,6 +72,20 @@ function verifyHmac(query: URLSearchParams, secret: string): boolean {
 }
 
 /**
+ * Redirect to /login while preserving every query param this request came in
+ * with (shop, hmac, host, embedded, id_token, session, timestamp, locale...).
+ * A bare `new URL('/login', request.url)` drops all of them, which lands the
+ * merchant on /login with no `shop` — and that's exactly what stopped
+ * (auth)/login/page.tsx's own shop-param recovery (redirect back into OAuth)
+ * from ever firing, a real Shopify App Store review rejection.
+ */
+function redirectToLogin(request: NextRequest): NextResponse {
+  const loginUrl = new URL('/login', request.url)
+  loginUrl.search = request.nextUrl.search
+  return NextResponse.redirect(loginUrl)
+}
+
+/**
  * Supabase server client that writes session cookies onto `response` with
  * SameSite=None so they're sent on requests inside the Shopify iframe.
  */
@@ -107,7 +121,7 @@ export async function GET(request: NextRequest) {
   const idToken = searchParams.get('id_token') ?? ''
 
   if (!shop || !hmac) {
-    return NextResponse.redirect(new URL('/login', request.url))
+    return redirectToLogin(request)
   }
 
   const shopRegex = /^[a-zA-Z0-9][a-zA-Z0-9\-]*\.myshopify\.com$/
@@ -203,7 +217,7 @@ export async function GET(request: NextRequest) {
     await supabase.auth.admin.getUserById(store.user_id)
   if (userError || !userData?.user?.email) {
     console.error('[shopify/auth] Cannot find user for store:', store.id, userError)
-    return NextResponse.redirect(new URL('/login', request.url))
+    return redirectToLogin(request)
   }
 
   const { data: linkData, error: linkError } =
@@ -253,7 +267,7 @@ export async function GET(request: NextRequest) {
 
   if (linkError || !tokenHash) {
     console.error('[shopify/auth] generateLink failed:', linkError)
-    return NextResponse.redirect(new URL('/login', request.url))
+    return redirectToLogin(request)
   }
 
   const session = sessionClient(request, response)
@@ -270,7 +284,7 @@ export async function GET(request: NextRequest) {
 
   if (!verified) {
     console.error('[shopify/auth] verifyOtp failed for store:', store.id)
-    return NextResponse.redirect(new URL('/login', request.url))
+    return redirectToLogin(request)
   }
 
   return response
