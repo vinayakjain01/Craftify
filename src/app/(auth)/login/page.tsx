@@ -31,13 +31,15 @@ function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Tears down the popup-tab message listener + its timeout. Ref rather than
+  // state since it's plumbing for an in-flight async flow, not render input.
+  const googlePopupCleanupRef = useRef<(() => void) | null>(null)
 
-  // Stop polling for the popup-tab's session if this page unmounts first
+  // Stop listening for the popup-tab's session if this page unmounts first
   // (merchant navigates away before finishing Google sign-in elsewhere).
   useEffect(() => {
     return () => {
-      if (pollRef.current) clearInterval(pollRef.current)
+      googlePopupCleanupRef.current?.()
     }
   }, [])
 
@@ -85,23 +87,58 @@ function LoginForm() {
       setGoogleLoading(false)
       setGoogleMessage("Google sign-in opened in a new tab — return here once you've signed in.")
 
-      // /auth/callback (running in that new tab) writes the session cookie;
-      // once it lands, this frame picks it up and moves on on its own. A
-      // hard reload (not router.push) so App Bridge and middleware
-      // re-initialize against the new cookie instead of reusing stale state.
-      pollRef.current = setInterval(async () => {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (session) {
-          if (pollRef.current) clearInterval(pollRef.current)
-          window.location.href = '/dashboard'
-        }
-      }, 1500)
-
-      // Give up after 3 minutes rather than polling forever if the tab was
-      // never completed.
-      setTimeout(() => {
-        if (pollRef.current) clearInterval(pollRef.current)
+      // The popup's /auth/callback posts its session tokens back via
+      // window.opener.postMessage once it's done — NOT a poll of
+      // supabase.auth.getSession() in this frame, which was the earlier
+      // (still broken) approach: that reads THIS frame's own storage
+      // partition, and the popup's session cookie lands in ITS OWN partition
+      // (admin.shopify.com vs. craft-ify.vercel.app are different top-level
+      // sites) — the two never share state to poll for. postMessage crosses
+      // that boundary because it's a live window-reference call, not a
+      // shared-storage read.
+      let settled = false
+      const timeoutId = setTimeout(() => {
+        if (settled) return
+        settled = true
+        window.removeEventListener('message', onMessage)
+        setGoogleMessage('Timed out waiting for sign-in. Please refresh and try again.')
       }, 3 * 60 * 1000)
+
+      async function onMessage(event: MessageEvent) {
+        if (event.origin !== window.location.origin) return
+        if (event.data?.type !== 'craftify_session_ready' || settled) return
+        settled = true
+        clearTimeout(timeoutId)
+        window.removeEventListener('message', onMessage)
+
+        setGoogleMessage('Setting up your session…')
+        try {
+          // Re-issues the session cookie from these raw tokens, but from
+          // THIS frame's own request — so the resulting Set-Cookie lands in
+          // the iframe's partition instead of the popup's.
+          const res = await fetch('/api/auth/set-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              access_token: event.data.access_token,
+              refresh_token: event.data.refresh_token,
+            }),
+            credentials: 'include',
+          })
+          if (!res.ok) throw new Error('Session exchange failed')
+          // Hard reload, not router.push, so App Bridge and middleware
+          // re-initialize against the freshly-set cookie.
+          window.location.href = '/dashboard'
+        } catch {
+          setGoogleMessage('Sign-in succeeded but session setup failed — please refresh.')
+        }
+      }
+
+      window.addEventListener('message', onMessage)
+      googlePopupCleanupRef.current = () => {
+        clearTimeout(timeoutId)
+        window.removeEventListener('message', onMessage)
+      }
     } else {
       // Not embedded — Google works fine as a normal top-level redirect.
       const { error } = await supabase.auth.signInWithOAuth({
