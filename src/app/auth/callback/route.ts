@@ -9,15 +9,17 @@
  * Auth:    None checked directly — exchangeCodeForSession IS the auth check;
  *          a missing/invalid/expired code simply fails the exchange.
  * Query:   code (required)
- * Returns: 302 redirect to /dashboard on success, or /login?error=google_auth_failed
+ * Returns: on success, a tiny HTML page that closes itself if it's a popup
+ *          or nested in an iframe (Google, opened as a new tab from inside
+ *          Shopify's embedded admin — see (auth)/login/page.tsx), or
+ *          redirects to /dashboard otherwise; 302 to /login?error=google_auth_failed
  *          on any failure (missing code, exchange error).
  *
- * Cookies are written directly onto the redirect response (not via
- * next/headers' cookies()) with SameSite=None; Secure; Partitioned — the
- * same pattern /api/shopify/auth's sessionClient() already uses, so a
- * merchant who reaches this from inside Shopify's embedded iframe (Google
- * sign-in opened in a new tab, then closed) still gets a session cookie the
- * embedded app's own requests can actually read.
+ * Cookies are written directly onto the response (not via next/headers'
+ * cookies()) with SameSite=None; Secure; Partitioned — the same pattern
+ * /api/shopify/auth's sessionClient() already uses, so a merchant who
+ * reaches this from inside Shopify's embedded iframe still gets a session
+ * cookie the embedded app's own requests can actually read.
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
@@ -47,12 +49,30 @@ function sessionClient(request: NextRequest, response: NextResponse) {
   )
 }
 
+// This same page works whether it's loaded top-level (redirects itself to
+// /dashboard) or in a popup/new tab opened from inside Shopify's iframe
+// (closes itself, letting the opener's own poll — see (auth)/login/page.tsx
+// — pick up the now-set session cookie and move on).
+const CLOSE_OR_REDIRECT_HTML = `<!doctype html>
+<html><body>
+<script>
+  if (window.opener || window.parent !== window) {
+    window.close()
+  } else {
+    window.location.href = '/dashboard'
+  }
+</script>
+<p>Signed in — you can close this tab.</p>
+</body></html>`
+
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
 
   if (code) {
-    const response = NextResponse.redirect(`${origin}/dashboard`)
+    const response = new NextResponse(CLOSE_OR_REDIRECT_HTML, {
+      headers: { 'Content-Type': 'text/html' },
+    })
     const supabase = sessionClient(request, response)
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {

@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -26,10 +26,20 @@ function LoginForm() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
+  const [googleMessage, setGoogleMessage] = useState('')
   const [error, setError] = useState('')
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Stop polling for the popup-tab's session if this page unmounts first
+  // (merchant navigates away before finishing Google sign-in elsewhere).
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current)
+    }
+  }, [])
 
   // A shop param on THIS page means something upstream (a stale bookmark, a
   // dropped session mid-flow) landed a Shopify-launched merchant on the email
@@ -56,15 +66,56 @@ function LoginForm() {
   async function handleGoogleSignIn() {
     setGoogleLoading(true)
     setError('')
-    const { error } = await supabase.auth.signInWithOAuth({
+    setGoogleMessage('')
+
+    // skipBrowserRedirect: get the consent-screen URL back instead of Supabase
+    // auto-navigating this frame to it — Google refuses to render inside
+    // Shopify's admin iframe (403: "you do not have access to this page"),
+    // so whether we can use that URL directly depends on being embedded.
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        skipBrowserRedirect: true,
+      },
     })
-    if (error) {
-      setError(error.message)
+
+    if (error || !data?.url) {
+      setError(error?.message ?? 'Google sign-in failed. Please try again.')
       setGoogleLoading(false)
+      return
     }
-    // On success the browser navigates away to Google — no need to reset loading.
+
+    const isInIframe = (() => {
+      try { return window.self !== window.top } catch { return true }
+    })()
+
+    if (isInIframe) {
+      // Open Google's consent screen in a real top-level tab, not nested in
+      // Shopify's iframe, so it's actually allowed to render.
+      window.open(data.url, '_blank')
+      setGoogleLoading(false)
+      setGoogleMessage("Google sign-in opened in a new tab — come back here once you've signed in.")
+
+      // /auth/callback (running in that new tab) writes the session cookie;
+      // once it lands, this frame picks it up and moves on on its own.
+      pollRef.current = setInterval(async () => {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session) {
+          if (pollRef.current) clearInterval(pollRef.current)
+          router.push('/dashboard')
+        }
+      }, 2000)
+
+      // Give up after 3 minutes rather than polling forever if the tab was
+      // never completed.
+      setTimeout(() => {
+        if (pollRef.current) clearInterval(pollRef.current)
+      }, 3 * 60 * 1000)
+    } else {
+      // Not embedded — Google works fine as a normal top-level redirect.
+      window.location.href = data.url
+    }
   }
 
   async function handleLogin() {
@@ -98,6 +149,9 @@ function LoginForm() {
             <GoogleIcon />
             {googleLoading ? 'Redirecting to Google…' : 'Continue with Google'}
           </Button>
+          {googleMessage && (
+            <p className="text-sm text-center text-muted-foreground">{googleMessage}</p>
+          )}
 
           <div className="flex items-center gap-3">
             <div className="flex-1 h-px bg-border" />

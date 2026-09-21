@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -16,23 +16,65 @@ export default function SignupPage() {
   const [fullName, setFullName] = useState('')
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
+  const [googleMessage, setGoogleMessage] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const router = useRouter()
   const supabase = createClient()
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current)
+    }
+  }, [])
 
   async function handleGoogleSignIn() {
     setGoogleLoading(true)
     setError('')
-    const { error } = await supabase.auth.signInWithOAuth({
+    setGoogleMessage('')
+
+    // skipBrowserRedirect: get the consent-screen URL back instead of Supabase
+    // auto-navigating this frame to it — Google refuses to render inside
+    // Shopify's admin iframe (403: "you do not have access to this page"),
+    // so whether we can use that URL directly depends on being embedded.
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        skipBrowserRedirect: true,
+      },
     })
-    if (error) {
-      setError(error.message)
+
+    if (error || !data?.url) {
+      setError(error?.message ?? 'Google sign-in failed. Please try again.')
       setGoogleLoading(false)
+      return
     }
-    // On success the browser navigates away to Google — no need to reset loading.
+
+    const isInIframe = (() => {
+      try { return window.self !== window.top } catch { return true }
+    })()
+
+    if (isInIframe) {
+      window.open(data.url, '_blank')
+      setGoogleLoading(false)
+      setGoogleMessage("Google sign-in opened in a new tab — come back here once you've signed in.")
+
+      pollRef.current = setInterval(async () => {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session) {
+          if (pollRef.current) clearInterval(pollRef.current)
+          router.push('/dashboard')
+        }
+      }, 2000)
+
+      setTimeout(() => {
+        if (pollRef.current) clearInterval(pollRef.current)
+      }, 3 * 60 * 1000)
+    } else {
+      window.location.href = data.url
+    }
   }
 
   async function handleSignup() {
@@ -94,6 +136,9 @@ export default function SignupPage() {
             <GoogleIcon />
             {googleLoading ? 'Redirecting to Google…' : 'Sign up with Google'}
           </Button>
+          {googleMessage && (
+            <p className="text-sm text-center text-muted-foreground">{googleMessage}</p>
+          )}
 
           <div className="flex items-center gap-3">
             <div className="flex-1 h-px bg-border" />
