@@ -68,44 +68,34 @@ function LoginForm() {
     setError('')
     setGoogleMessage('')
 
-    // skipBrowserRedirect: get the consent-screen URL back instead of Supabase
-    // auto-navigating this frame to it — Google refuses to render inside
-    // Shopify's admin iframe (403: "you do not have access to this page"),
-    // so whether we can use that URL directly depends on being embedded.
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-        skipBrowserRedirect: true,
-      },
-    })
-
-    if (error || !data?.url) {
-      setError(error?.message ?? 'Google sign-in failed. Please try again.')
-      setGoogleLoading(false)
-      return
-    }
-
     const isInIframe = (() => {
       try { return window.self !== window.top } catch { return true }
     })()
 
     if (isInIframe) {
-      // Open Google's consent screen in a real top-level tab, not nested in
-      // Shopify's iframe, so it's actually allowed to render.
-      window.open(data.url, '_blank')
+      // Open OUR OWN /auth/google-start in a new tab — rather than calling
+      // signInWithOAuth here and opening ITS returned URL — so the PKCE
+      // code_verifier signInWithOAuth stashes in localStorage is written and
+      // later read back in the SAME top-level browsing context. Doing it
+      // from inside this iframe put the verifier in the iframe's own
+      // storage-partitioned localStorage (Shopify admin is a third-party
+      // context here); the new tab's separate partition never saw it, so
+      // /auth/callback's code exchange always failed with google_auth_failed.
+      window.open('/auth/google-start', '_blank', 'width=520,height=620')
       setGoogleLoading(false)
-      setGoogleMessage("Google sign-in opened in a new tab — come back here once you've signed in.")
+      setGoogleMessage("Google sign-in opened in a new tab — return here once you've signed in.")
 
       // /auth/callback (running in that new tab) writes the session cookie;
-      // once it lands, this frame picks it up and moves on on its own.
+      // once it lands, this frame picks it up and moves on on its own. A
+      // hard reload (not router.push) so App Bridge and middleware
+      // re-initialize against the new cookie instead of reusing stale state.
       pollRef.current = setInterval(async () => {
         const { data: { session } } = await supabase.auth.getSession()
         if (session) {
           if (pollRef.current) clearInterval(pollRef.current)
-          router.push('/dashboard')
+          window.location.href = '/dashboard'
         }
-      }, 2000)
+      }, 1500)
 
       // Give up after 3 minutes rather than polling forever if the tab was
       // never completed.
@@ -114,7 +104,15 @@ function LoginForm() {
       }, 3 * 60 * 1000)
     } else {
       // Not embedded — Google works fine as a normal top-level redirect.
-      window.location.href = data.url
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
+      })
+      if (error) {
+        setError(error.message)
+        setGoogleLoading(false)
+      }
+      // Browser navigates to Google automatically on success.
     }
   }
 
