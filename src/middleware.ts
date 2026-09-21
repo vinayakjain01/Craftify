@@ -47,7 +47,11 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api/shopify/install') ||
     pathname.startsWith('/api/shopify/callback')
 
-  if (isShopifyAuthRoute) {
+  // Google (or any future third-party) OAuth code exchange — no session
+  // exists yet at the point this runs, same reasoning as the Shopify routes.
+  const isOAuthCallback = pathname.startsWith('/auth/callback')
+
+  if (isShopifyAuthRoute || isOAuthCallback) {
     return supabaseResponse
   }
 

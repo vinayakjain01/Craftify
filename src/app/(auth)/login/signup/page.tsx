@@ -8,16 +8,32 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { GoogleIcon } from '@/components/ui/google-icon'
 
 export default function SignupPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const router = useRouter()
   const supabase = createClient()
+
+  async function handleGoogleSignIn() {
+    setGoogleLoading(true)
+    setError('')
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    })
+    if (error) {
+      setError(error.message)
+      setGoogleLoading(false)
+    }
+    // On success the browser navigates away to Google — no need to reset loading.
+  }
 
   async function handleSignup() {
     setLoading(true)
@@ -68,21 +84,38 @@ export default function SignupPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           {error && <p className="text-sm text-destructive">{error}</p>}
+
+          <Button
+            variant="outline"
+            className="w-full gap-2"
+            onClick={handleGoogleSignIn}
+            disabled={googleLoading || loading}
+          >
+            <GoogleIcon />
+            {googleLoading ? 'Redirecting to Google…' : 'Sign up with Google'}
+          </Button>
+
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs text-muted-foreground">or create with email</span>
+            <div className="flex-1 h-px bg-border" />
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="name">Full name</Label>
-            <Input id="name" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Vinayak Jain"/>
+            <Input id="name" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Vinayak Jain" disabled={googleLoading}/>
           </div>
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com"/>
+            <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" disabled={googleLoading}/>
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
-            <Input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Min 8 characters"/>
+            <Input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Min 8 characters" disabled={googleLoading}/>
           </div>
         </CardContent>
         <CardFooter className="flex flex-col gap-3">
-          <Button className="w-full" onClick={handleSignup} disabled={loading}>
+          <Button className="w-full" onClick={handleSignup} disabled={loading || googleLoading}>
             {loading ? 'Creating account…' : 'Create account'}
           </Button>
           <p className="text-sm text-muted-foreground text-center">
