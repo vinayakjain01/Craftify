@@ -1,10 +1,20 @@
 /**
  * GET /api/cron/generate
  *
- * Drains the generation_jobs queue. Scheduled by Vercel Cron (vercel.json) to
- * run every minute; each invocation loops processBatch() until its time
- * budget is used up or the queue goes empty, so a large backlog clears over
- * a few invocations without any extra worker infra.
+ * FALLBACK drain for the generation_jobs queue — the primary path is the
+ * DigitalOcean worker (src/workers/catalog-worker.ts) consuming BullMQ jobs
+ * in real time whenever REDIS_URL is configured (see isRedisEnabled() in
+ * src/lib/redis.ts). This route exists to still clear the queue if a job
+ * lands in the database without ever reaching BullMQ — the worker being down
+ * when it was enqueued, REDIS_URL missing in some environment, etc.
+ *
+ * vercel.json currently schedules this once daily ("0 0 * * *"), NOT every
+ * minute — a prior version of this comment claimed otherwise, which never
+ * matched vercel.json and would have made a stray job sit for up to 24h
+ * before this fallback picked it up. If tighter fallback coverage is wanted,
+ * confirm the Vercel plan actually supports a more frequent cron (per-minute
+ * schedules require Vercel Pro or higher — Hobby is capped at once per day)
+ * before changing the schedule here.
  *
  * Auth:    CRON_SECRET bearer token (Authorization: Bearer <CRON_SECRET>), set by Vercel Cron
  * Returns: { ticks, claimed, completed, failed, ms }
@@ -14,10 +24,6 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { processBatch } from '@/lib/generation-queue'
-
-// Drains the generation_jobs queue. Configured in vercel.json to run every
-// minute. Each invocation processes several batches until it runs low on time,
-// so a 1000-job backlog clears over a few minutes without any extra infra.
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
