@@ -20,9 +20,18 @@ api_version = "2026-04"
   uri = "/api/webhooks/shop/redact"
   compliance_topics = [ "shop/redact" ]
 
+  [[webhooks.subscriptions]]
+  uri = "/api/webhooks/app/uninstalled"
+  topics = [ "app/uninstalled" ]
+
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_files,write_files,read_inventory,read_locations,read_product_listings,write_product_listings,read_products,write_products"
+# Trimmed from the original 8 scopes to what's actually used — src/lib/shopify.ts's
+# GraphQL client only ever reads shop{}/products{}/productsCount{}; there is no
+# file, product-write, or product-listing mutation anywhere in this codebase.
+# Keep this in sync with SHOPIFY_SCOPES in .env.local / Vercel env vars — that's
+# the value /api/shopify/install actually sends to Shopify's OAuth authorize URL.
+scopes = "read_products,read_inventory,read_locations"
 optional_scopes = [ ]
 use_legacy_install_flow = false
 
