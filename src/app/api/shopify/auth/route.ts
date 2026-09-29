@@ -30,6 +30,7 @@ import crypto from 'crypto'
 import { ACTIVE_STORE_COOKIE } from '@/lib/active-store'
 import { SHOPIFY_HOST_COOKIE } from '@/lib/shopify-host'
 import { exchangeSessionTokenForOfflineToken } from '@/lib/shopify-token'
+import { encryptToken } from '@/lib/token-encryption'
 
 function adminClient() {
   return createAdmin(
@@ -174,14 +175,15 @@ export async function GET(request: NextRequest) {
       await supabase
         .from('stores')
         .update({
-          access_token,
+          // Encrypted at rest — see src/lib/token-encryption.ts.
+          access_token: encryptToken(access_token),
           ...(scope ? { scope } : {}),
           needs_reauth: false,
           token_expires_at: expires_in
             ? new Date(Date.now() + expires_in * 1000).toISOString()
             : null,
           // Keeps background jobs authenticated past the 1-hour access token.
-          ...(refresh_token ? { refresh_token } : {}),
+          ...(refresh_token ? { refresh_token: encryptToken(refresh_token) } : {}),
           ...(refresh_token_expires_in
             ? {
                 refresh_token_expires_at: new Date(

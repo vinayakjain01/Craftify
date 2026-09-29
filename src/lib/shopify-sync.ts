@@ -22,6 +22,7 @@ import { chunkArray } from '@/lib/concurrency'
 import { logPerf, measureAsync } from '@/lib/perf'
 import { createShopifyClient, ShopifyProduct } from '@/lib/shopify'
 import { enqueueGeneration, findUncoveredInStockVariants } from '@/lib/generation-queue'
+import { decryptToken, encryptToken } from '@/lib/token-encryption'
 
 type StoreRow = {
   id: string
@@ -50,27 +51,34 @@ async function ensureFreshToken(
   store: StoreRow,
   supabase: SupabaseClient
 ): Promise<string> {
+  // stores.access_token/refresh_token are encrypted at rest (see
+  // src/lib/token-encryption.ts) — decrypt once here, the single point every
+  // sync/worker call funnels through, rather than at each of the two
+  // call sites below.
+  const accessToken = decryptToken(store.access_token)
+  const refreshToken = decryptToken(store.refresh_token)
+
   const expiresAt = store.token_expires_at ? Date.parse(store.token_expires_at) : null
 
   // No expiry recorded means a legacy non-expiring token — nothing to refresh,
   // and the Admin API will reject it with a clear message of its own.
-  if (!expiresAt || !store.refresh_token) return store.access_token
-  if (Date.now() < expiresAt - TOKEN_REFRESH_MARGIN_MS) return store.access_token
+  if (!expiresAt || !refreshToken) return accessToken ?? store.access_token
+  if (Date.now() < expiresAt - TOKEN_REFRESH_MARGIN_MS) return accessToken ?? store.access_token
 
   try {
     const { refreshOfflineToken } = await import('@/lib/shopify-token')
-    const refreshed = await refreshOfflineToken(store.shop_domain, store.refresh_token)
+    const refreshed = await refreshOfflineToken(store.shop_domain, refreshToken)
 
     await supabase
       .from('stores')
       .update({
-        access_token: refreshed.access_token,
+        access_token: encryptToken(refreshed.access_token),
         token_expires_at: refreshed.expires_in
           ? new Date(Date.now() + refreshed.expires_in * 1000).toISOString()
           : null,
         // Shopify invalidates the old refresh token immediately, so the new one
         // must land in the same write.
-        ...(refreshed.refresh_token ? { refresh_token: refreshed.refresh_token } : {}),
+        ...(refreshed.refresh_token ? { refresh_token: encryptToken(refreshed.refresh_token) } : {}),
         ...(refreshed.refresh_token_expires_in
           ? {
               refresh_token_expires_at: new Date(
@@ -86,7 +94,7 @@ async function ensureFreshToken(
     return refreshed.access_token
   } catch (err: any) {
     console.error(`[sync] token refresh failed for ${store.shop_domain}:`, err?.message)
-    return store.access_token
+    return accessToken ?? store.access_token
   }
 }
 

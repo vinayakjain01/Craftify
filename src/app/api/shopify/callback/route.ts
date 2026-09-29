@@ -30,6 +30,7 @@ import crypto from 'crypto'
 import { ACTIVE_STORE_COOKIE } from '@/lib/active-store'
 import { SHOPIFY_HOST_COOKIE } from '@/lib/shopify-host'
 import { createShopifyClient } from '@/lib/shopify'
+import { encryptToken } from '@/lib/token-encryption'
 
 function adminClient() {
   return createSupabaseAdmin(
@@ -255,9 +256,12 @@ export async function GET(request: NextRequest) {
       {
         user_id: resolvedUserId,
         shop_domain: shop,
-        access_token: accessToken,
+        // Encrypted at rest — accessToken/refreshToken above (used for the
+        // getShop() call) stay the plaintext values Shopify just returned;
+        // only what's written to the database is encrypted.
+        access_token: encryptToken(accessToken),
         token_expires_at: expiresAt,
-        refresh_token: refreshToken,
+        refresh_token: encryptToken(refreshToken),
         refresh_token_expires_at: refreshExpiresAt,
         needs_reauth: false,
         scope,
