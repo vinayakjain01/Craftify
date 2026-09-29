@@ -8,7 +8,8 @@
  *   - uploadBuffer — streams a compositor-rendered image buffer to Cloudinary.
  *   - toDeliveryUrl — inserts f_auto/q_auto:best delivery transforms into a
  *     Cloudinary URL.
- *   - deleteImage — removes an uploaded image by its Cloudinary public id.
+ *   - deleteImage — removes one uploaded image by its Cloudinary public id.
+ *   - deleteImages — batch-removes many, chunked to Cloudinary's 100-id-per-call limit.
  *
  * DEPENDENCIES: logPerf (@/lib/perf) to record upload timings.
  */
@@ -85,4 +86,28 @@ export function toDeliveryUrl(secureUrl: string, extra?: string): string {
 /** Delete an uploaded image from Cloudinary by its public id. */
 export async function deleteImage(publicId: string): Promise<void> {
   await cloudinary.uploader.destroy(publicId)
+}
+
+/**
+ * Batch-delete uploaded images by their exact public ids — chunked to
+ * Cloudinary's 100-id-per-call limit for api.delete_resources.
+ *
+ * IMPORTANT: this deletes by EXACT id, never by folder prefix. Every
+ * placement's folder (catalog-creatives/catalog, /feed, /story, /reel) is
+ * shared across every store — public_id, not the folder, is what's
+ * store-specific (it's built from that store's own product/variant/
+ * template ids). A prefix-based bulk delete would remove every tenant's
+ * creatives, not just the one being cleaned up (see shop/redact's use of
+ * this function). Failures are swallowed per-chunk so one bad id doesn't
+ * abort cleanup of the rest — this runs during account deletion, where
+ * "mostly cleaned up" beats "aborted halfway."
+ */
+export async function deleteImages(publicIds: string[]): Promise<void> {
+  const CHUNK_SIZE = 100
+  for (let i = 0; i < publicIds.length; i += CHUNK_SIZE) {
+    const chunk = publicIds.slice(i, i + CHUNK_SIZE)
+    await cloudinary.api.delete_resources(chunk, { resource_type: 'image' }).catch(err => {
+      console.error('[cloudinary] deleteImages chunk failed:', err?.message || err)
+    })
+  }
 }
