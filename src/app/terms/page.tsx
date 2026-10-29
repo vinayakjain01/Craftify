@@ -1,8 +1,6 @@
 import { LegalPageLayout, LegalSection } from '@/components/legal/legal-page-layout'
 
-// TODO before submitting to the Shopify App Store: replace this placeholder
-// with Craftify's real support address.
-const SUPPORT_EMAIL = 'support@craftify.app'
+const SUPPORT_EMAIL = 'vinayak@growify.in'
 
 export const metadata = { title: 'Terms of Service — Craftify' }
 
