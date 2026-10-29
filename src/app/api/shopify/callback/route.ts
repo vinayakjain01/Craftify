@@ -31,7 +31,7 @@ import { ACTIVE_STORE_COOKIE } from '@/lib/active-store'
 import { SHOPIFY_HOST_COOKIE } from '@/lib/shopify-host'
 import { createShopifyClient } from '@/lib/shopify'
 import { encryptToken } from '@/lib/token-encryption'
-import { seedDefaultTemplateIfNeeded } from '@/lib/default-template'
+import { seedStoreDefaults } from '@/lib/default-template'
 
 function adminClient() {
   return createSupabaseAdmin(
@@ -290,12 +290,13 @@ export async function GET(request: NextRequest) {
     headers: { 'x-internal-secret': process.env.CRON_SECRET! },
   }).catch(console.error)
 
-  // Give the store a ready-to-use template so Rules Engine / Creatives
-  // aren't a dead end before the merchant has built one of their own. No-op
-  // if this store already has a template (e.g. re-auth of an existing
-  // install). Awaited — it's two fast queries and should be there the moment
-  // the merchant lands on the dashboard.
-  await seedDefaultTemplateIfNeeded(supabase, { userId: resolvedUserId, storeId: store.id })
+  // Give the store a ready-to-use template plus a catch-all "All products"
+  // rule, so Rules Engine / Creatives aren't a dead end before the merchant
+  // has configured anything. No-op on each piece the store already has
+  // (e.g. re-auth of an existing install, or a merchant with their own rules
+  // already). Awaited — a handful of fast queries, should be there the
+  // moment the merchant lands on the dashboard.
+  await seedStoreDefaults(supabase, { userId: resolvedUserId, storeId: store.id })
 
   // Clear OAuth cookies
   const hostParam = request.cookies.get('shopify_oauth_host')?.value
