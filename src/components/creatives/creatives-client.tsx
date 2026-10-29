@@ -454,6 +454,11 @@ export function CreativesClient({ stores }: { stores: { id: string; shop_name: s
                 <strong>{variantOptionName || 'option'}</strong> is{' '}
                 <strong>{variantOptionValue || '…'}</strong>
               </p>
+              {(!variantOptionName.trim() || !variantOptionValue.trim()) && (
+                <p className="text-xs text-destructive">
+                  Fill in both the option name and value above to enable &quot;Generate creatives&quot;.
+                </p>
+              )}
             </div>
           )}
 
@@ -530,9 +535,15 @@ export function CreativesClient({ stores }: { stores: { id: string; shop_name: s
                   </Button>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground">
-                Catalog → Meta Commerce feed · Feed/Story/Reel → ad placements, never shown in the feed
-              </p>
+              {selectedGenerateTypes.length === 0 ? (
+                <p className="text-xs text-destructive">
+                  Select at least one placement above to enable &quot;Generate creatives&quot;.
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Catalog → Meta Commerce feed · Feed/Story/Reel → ad placements, never shown in the feed
+                </p>
+              )}
             </div>
           </div>
         </CardContent>
