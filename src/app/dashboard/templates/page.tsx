@@ -8,18 +8,29 @@ import { Plus, Pencil, Layers } from 'lucide-react'
 import { DeleteTemplateButton } from '@/components/templates/delete-template-button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ASSET_TYPE_CONFIG, AssetType } from '@/types/template'
+import { ArrowRight, Zap } from 'lucide-react'
 
 export default async function TemplatesPage() {
   const supabase = await createClient()
   const { activeStoreId } = await getActiveStore()
 
-  const { data: templates } = activeStoreId
-    ? await supabase
-        .from('templates')
-        .select('*, template_categories(name)')
-        .eq('store_id', activeStoreId)
-        .order('created_at', { ascending: false })
-    : { data: [] }
+  const [{ data: templates }, { count: rulesCount }] = activeStoreId
+    ? await Promise.all([
+        supabase
+          .from('templates')
+          .select('*, template_categories(name)')
+          .eq('store_id', activeStoreId)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('template_rules')
+          .select('id', { count: 'exact', head: true })
+          .eq('store_id', activeStoreId),
+      ])
+    : [{ data: [] }, { count: 0 }]
+
+  // Next-step nudge: a template with no rule yet can never actually generate
+  // anything, and "Rules Engine" isn't an obvious next click from here.
+  const showRuleNudge = (templates?.length ?? 0) > 0 && !rulesCount
 
   return (
     <div className="space-y-6">
@@ -37,6 +48,25 @@ export default async function TemplatesPage() {
           </Button>
         </Link>
       </div>
+
+      {showRuleNudge && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="flex items-center justify-between gap-3 p-4">
+            <div className="flex items-center gap-2 text-sm">
+              <Zap className="h-4 w-4 text-primary" />
+              <span>
+                You have a template — next, set up a rule so products actually get assigned to it.
+              </span>
+            </div>
+            <Link href="/dashboard/rules">
+              <Button size="sm">
+                Set up a rule
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      )}
 
       {templates && templates.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

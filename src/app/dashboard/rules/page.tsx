@@ -10,10 +10,15 @@ export default async function RulesPage() {
   // filtered by is_active — there's no "archive a template" feature
   // anywhere in the app (deleting one is a hard delete), so every template
   // a merchant can see on the Templates page must also be selectable here.
-  const { data: templates } = activeStoreId
-    ? await supabase.from('templates').select('id, name')
-        .eq('store_id', activeStoreId)
-    : { data: [] }
+  const [{ data: templates }, { count: creativeCount }] = activeStoreId
+    ? await Promise.all([
+        supabase.from('templates').select('id, name').eq('store_id', activeStoreId),
+        supabase
+          .from('generated_creatives')
+          .select('id', { count: 'exact', head: true })
+          .eq('store_id', activeStoreId),
+      ])
+    : [{ data: [] }, { count: 0 }]
 
   const activeStores = stores
     .filter(s => s.id === activeStoreId)
@@ -27,7 +32,7 @@ export default async function RulesPage() {
           Automatically assign templates to products based on tags, vendor, type, or discount
         </p>
       </div>
-      <RulesClient stores={activeStores} templates={templates || []} />
+      <RulesClient stores={activeStores} templates={templates || []} hasGeneratedCreatives={(creativeCount ?? 0) > 0} />
     </div>
   )
 }

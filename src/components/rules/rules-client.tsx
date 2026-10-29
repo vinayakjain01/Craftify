@@ -66,11 +66,15 @@ interface Rule {
 interface Props {
   stores: { id: string; shop_name: string; shop_domain: string }[]
   templates: { id: string; name: string }[]
+  /** Whether this store has generated any creative yet — drives the
+   * "next step" nudge toward Creatives once a rule exists but nothing's
+   * been generated. */
+  hasGeneratedCreatives: boolean
 }
 
 const emptyCondition = (): RuleCondition => ({ field: 'tag', operator: 'is', value: '' })
 
-export function RulesClient({ stores, templates }: Props) {
+export function RulesClient({ stores, templates, hasGeneratedCreatives }: Props) {
   const [selectedStore, setSelectedStore] = useState(stores[0]?.id || '')
   const [rules, setRules] = useState<Rule[]>([])
   const [loading, setLoading] = useState(true)
@@ -331,6 +335,26 @@ export function RulesClient({ stores, templates }: Props) {
           </Button>
         </CardContent>
       </Card>
+
+      {/* Next-step nudge: a rule with nothing generated yet means the
+          merchant has set everything up but hasn't actually produced a
+          creative — "Creatives" isn't an obvious next click from here. */}
+      {!loading && rules.length > 0 && !hasGeneratedCreatives && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="flex items-center justify-between gap-3 p-4">
+            <div className="flex items-center gap-2 text-sm">
+              <Zap className="h-4 w-4 text-primary" />
+              <span>Rules are set up — next, generate your first creatives.</span>
+            </div>
+            <Link href="/dashboard/creatives">
+              <Button size="sm">
+                Generate creatives
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── Existing rules ───────────────────────────────────────────────── */}
       <div className="space-y-2">

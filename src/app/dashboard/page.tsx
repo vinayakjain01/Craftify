@@ -5,6 +5,7 @@ import { getActiveStore } from '@/lib/active-store'
 import { findUncoveredInStockVariants } from '@/lib/generation-queue'
 import { formatDistanceToNow } from 'date-fns'
 import { ALL_ASSET_TYPES, ASSET_TYPE_CONFIG } from '@/types/template'
+import { OnboardingChecklist } from '@/components/dashboard/onboarding-checklist'
 import {
   ShoppingBag, Layers, ImageIcon, Zap, AlertTriangle,
   Clock, Loader2, X, ArrowUpRight, RefreshCw, Wand2, Plus, Settings,
@@ -241,6 +242,13 @@ export default async function DashboardPage({
       </div>
 
       {authError && <AuthErrorNotice reason={authError} />}
+
+      {/* "What do I do next" guide — hides itself once every step is done */}
+      <OnboardingChecklist steps={[
+        { key: 'template', label: 'Create a template', done: templateCount > 0, href: '/dashboard/templates/new', cta: 'Create template' },
+        { key: 'rule', label: 'Set up a rule to assign it', done: rulesCount > 0, href: '/dashboard/rules', cta: 'Set up rule' },
+        { key: 'creative', label: 'Generate your first creative', done: creativeCount > 0, href: '/dashboard/creatives', cta: 'Generate' },
+      ]} />
 
       {/* Reconnect banner — shown when any connected store needs reauth */}
       {needsReauth && (
