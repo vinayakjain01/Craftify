@@ -210,6 +210,12 @@ function LoginForm() {
           <p className="text-sm text-muted-foreground text-center">
             No account? <Link href="/login/signup" className="underline">Sign up</Link>
           </p>
+          <p className="text-xs text-muted-foreground text-center">
+            By continuing, you agree to our{' '}
+            <Link href="/terms" className="underline">Terms of Service</Link>{' '}
+            and{' '}
+            <Link href="/privacy" className="underline">Privacy Policy</Link>.
+          </p>
         </CardFooter>
       </Card>
     </div>

@@ -206,6 +206,12 @@ export default function SignupPage() {
           <p className="text-sm text-muted-foreground text-center">
             Already have an account? <Link href="/login" className="underline">Sign in</Link>
           </p>
+          <p className="text-xs text-muted-foreground text-center">
+            By creating an account, you agree to our{' '}
+            <Link href="/terms" className="underline">Terms of Service</Link>{' '}
+            and{' '}
+            <Link href="/privacy" className="underline">Privacy Policy</Link>.
+          </p>
         </CardFooter>
       </Card>
     </div>

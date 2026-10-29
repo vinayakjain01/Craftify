@@ -153,6 +153,18 @@ export function Sidebar({
           Sign out
         </button>
       </div>
+
+      {/* Legal links — reachable from every authenticated screen, not just
+          the logged-out login/signup forms. */}
+      <div style={{
+        padding: '0 14px 12px',
+        display: 'flex', alignItems: 'center', gap: 6,
+        fontSize: 11, color: '#9B93AC',
+      }}>
+        <Link href="/privacy" style={{ color: 'inherit', textDecoration: 'none' }}>Privacy</Link>
+        <span>·</span>
+        <Link href="/terms" style={{ color: 'inherit', textDecoration: 'none' }}>Terms</Link>
+      </div>
     </aside>
   )
 }
