@@ -31,6 +31,7 @@ import { ACTIVE_STORE_COOKIE } from '@/lib/active-store'
 import { SHOPIFY_HOST_COOKIE } from '@/lib/shopify-host'
 import { createShopifyClient } from '@/lib/shopify'
 import { encryptToken } from '@/lib/token-encryption'
+import { seedDefaultTemplateIfNeeded } from '@/lib/default-template'
 
 function adminClient() {
   return createSupabaseAdmin(
@@ -288,6 +289,13 @@ export async function GET(request: NextRequest) {
     method: 'POST',
     headers: { 'x-internal-secret': process.env.CRON_SECRET! },
   }).catch(console.error)
+
+  // Give the store a ready-to-use template so Rules Engine / Creatives
+  // aren't a dead end before the merchant has built one of their own. No-op
+  // if this store already has a template (e.g. re-auth of an existing
+  // install). Awaited — it's two fast queries and should be there the moment
+  // the merchant lands on the dashboard.
+  await seedDefaultTemplateIfNeeded(supabase, { userId: resolvedUserId, storeId: store.id })
 
   // Clear OAuth cookies
   const hostParam = request.cookies.get('shopify_oauth_host')?.value
