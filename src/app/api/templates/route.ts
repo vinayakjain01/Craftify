@@ -66,6 +66,7 @@ export async function POST(request: NextRequest) {
       category_id: category_id || null,
       canvas_data,
       asset_type: resolvedAssetType,
+      is_active: true,
     })
     .select()
     .single()

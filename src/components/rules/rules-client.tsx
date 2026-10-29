@@ -12,6 +12,7 @@
  * labelled — to make the evaluation order unambiguous.
  */
 import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import { shopifyFetch } from '@/lib/shopify-token'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -287,14 +288,25 @@ export function RulesClient({ stores, templates }: Props) {
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="sm:col-span-2">
               <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Template</label>
-              <Select value={templateId} onValueChange={setTemplateId}>
-                <SelectTrigger><SelectValue placeholder="Choose a template" /></SelectTrigger>
+              <Select value={templateId} onValueChange={setTemplateId} disabled={templates.length === 0}>
+                <SelectTrigger>
+                  <SelectValue placeholder={templates.length === 0 ? 'No templates yet' : 'Choose a template'} />
+                </SelectTrigger>
                 <SelectContent>
                   {templates.map(t => (
                     <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {templates.length === 0 && (
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  No templates yet —{' '}
+                  <Link href="/dashboard/templates/new" className="underline underline-offset-2">
+                    create one first
+                  </Link>
+                  .
+                </p>
+              )}
             </div>
             <div>
               <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
@@ -309,6 +321,9 @@ export function RulesClient({ stores, templates }: Props) {
           </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}
+          {!error && !templateId && templates.length > 0 && (
+            <p className="text-sm text-muted-foreground">Choose a template to enable &quot;Add rule&quot;.</p>
+          )}
 
           <Button onClick={handleAdd} disabled={adding || !templateId}>
             <Plus className="h-4 w-4" />

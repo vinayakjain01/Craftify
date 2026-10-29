@@ -6,10 +6,13 @@ export default async function RulesPage() {
   const supabase = await createClient()
   const { activeStoreId, stores } = await getActiveStore()
 
-  // Templates for the active store only (rules are store-scoped).
+  // Templates for the active store only (rules are store-scoped). Not
+  // filtered by is_active — there's no "archive a template" feature
+  // anywhere in the app (deleting one is a hard delete), so every template
+  // a merchant can see on the Templates page must also be selectable here.
   const { data: templates } = activeStoreId
     ? await supabase.from('templates').select('id, name')
-        .eq('store_id', activeStoreId).eq('is_active', true)
+        .eq('store_id', activeStoreId)
     : { data: [] }
 
   const activeStores = stores
