@@ -70,11 +70,19 @@ interface Props {
    * "next step" nudge toward Creatives once a rule exists but nothing's
    * been generated. */
   hasGeneratedCreatives: boolean
+  /** Pre-select this template in the New rule form — set when the merchant
+   * arrives here via a template's "Set up a rule" link
+   * (/dashboard/rules?templateId=...) rather than navigating in directly. */
+  initialTemplateId?: string
 }
 
-const emptyCondition = (): RuleCondition => ({ field: 'tag', operator: 'is', value: '' })
+// "All products" first: it's the simplest, most common rule (one template for
+// the whole catalog), and the one the guided "create template -> set up a
+// rule" flow expects to see already selected rather than making the merchant
+// switch off "Tag" first.
+const emptyCondition = (): RuleCondition => ({ field: 'all_products', operator: 'is', value: '' })
 
-export function RulesClient({ stores, templates, hasGeneratedCreatives }: Props) {
+export function RulesClient({ stores, templates, hasGeneratedCreatives, initialTemplateId }: Props) {
   const [selectedStore, setSelectedStore] = useState(stores[0]?.id || '')
   const [rules, setRules] = useState<Rule[]>([])
   const [loading, setLoading] = useState(true)
@@ -83,7 +91,7 @@ export function RulesClient({ stores, templates, hasGeneratedCreatives }: Props)
   const [name, setName] = useState('')
   const [conditions, setConditions] = useState<RuleCondition[]>([emptyCondition()])
   const [mode, setMode] = useState<'all' | 'any'>('all')
-  const [templateId, setTemplateId] = useState('')
+  const [templateId, setTemplateId] = useState(initialTemplateId || '')
   const [priority, setPriority] = useState(0)
   const [adding, setAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)

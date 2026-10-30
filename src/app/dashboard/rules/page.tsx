@@ -2,7 +2,12 @@ import { createClient } from '@/lib/supabase/server'
 import { getActiveStore } from '@/lib/active-store'
 import { RulesClient } from '@/components/rules/rules-client'
 
-export default async function RulesPage() {
+export default async function RulesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ templateId?: string }>
+}) {
+  const { templateId } = await searchParams
   const supabase = await createClient()
   const { activeStoreId, stores } = await getActiveStore()
 
@@ -32,7 +37,12 @@ export default async function RulesPage() {
           Automatically assign templates to products based on tags, vendor, type, or discount
         </p>
       </div>
-      <RulesClient stores={activeStores} templates={templates || []} hasGeneratedCreatives={(creativeCount ?? 0) > 0} />
+      <RulesClient
+        stores={activeStores}
+        templates={templates || []}
+        hasGeneratedCreatives={(creativeCount ?? 0) > 0}
+        initialTemplateId={templateId}
+      />
     </div>
   )
 }

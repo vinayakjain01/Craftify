@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Save, ArrowLeft, Loader2, Layers, Sparkles } from 'lucide-react'
+import { Save, ArrowLeft, Loader2, Layers, Sparkles, Zap, ArrowRight } from 'lucide-react'
 import {
   CanvasData, AspectRatio, ASPECT_RATIOS, PRODUCT_LAYER_ID,
   AssetType, ALL_ASSET_TYPES, ASSET_TYPE_CONFIG,
@@ -222,6 +222,19 @@ export function TemplateBuilderClient({ template, categories, previewProducts = 
         <div className="flex items-center gap-2 flex-shrink-0">
           {error && <p className="text-xs text-destructive">{error}</p>}
           {isDirty && <span className="text-xs text-muted-foreground">Unsaved</span>}
+          {/* Only once this template has an id (saved at least once) — a
+              rule needs a real template_id to point at. This is also what
+              the "New template" -> Save redirect lands on, so it's the
+              first thing visible right after creating one. */}
+          {template && (
+            <Link href={`/dashboard/rules?templateId=${template.id}`}>
+              <Button size="sm" variant="outline">
+                <Zap className="h-3.5 w-3.5 mr-1.5" />
+                Set up a rule
+                <ArrowRight className="h-3.5 w-3.5 ml-1.5" />
+              </Button>
+            </Link>
+          )}
           <Button size="sm" onClick={handleSave} disabled={saving}>
             {saving
               ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Saving…</>
