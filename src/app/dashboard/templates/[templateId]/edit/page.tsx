@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { getUser } from '@/lib/supabase/get-user'
 import { getActiveStore } from '@/lib/active-store'
 import { TemplateBuilderClient } from '@/components/builder/template-builder-client'
 
@@ -8,9 +9,11 @@ export default async function EditTemplatePage({
 }: {
   params: Promise<{ templateId: string }>
 }) {
-  const { templateId } = await params
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const [{ templateId }, supabase, user] = await Promise.all([
+    params,
+    createClient(),
+    getUser(), // React-cached — no extra Supabase auth round-trip
+  ])
 
   const [{ data: template }, { data: categories }, { activeStoreId }] = await Promise.all([
     supabase

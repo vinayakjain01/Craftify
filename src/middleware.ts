@@ -32,7 +32,21 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  // getSession() reads/validates the JWT locally (network call only when an
+  // actual token refresh is needed) — unlike getUser(), which always makes a
+  // round-trip to Supabase's Auth server. That network call ran on every
+  // single request this middleware matches (every page nav, every API call),
+  // which is most of the app's perceived navigation latency.
+  //
+  // This is safe here because middleware's only job with `user` is a UX
+  // redirect (bounce to /login or away from the login page) — it is NOT the
+  // app's security boundary. Every Server Component/Route Handler that
+  // actually reads or writes data calls its own getUser() (see
+  // src/lib/supabase/get-user.ts) and every query runs through Postgres RLS
+  // scoped to that revalidated user — a stale/forged cookie that slipped
+  // past this redirect gate still can't read or write anything here.
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user ?? null
 
   const pathname = request.nextUrl.pathname
 

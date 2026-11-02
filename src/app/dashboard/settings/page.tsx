@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { getUser } from '@/lib/supabase/get-user'
 import { ConnectStoreForm } from '@/components/settings/connect-store-form'
 import { StoreCard } from '@/components/settings/store-card'
 import { OAuthStatusBanner } from '@/components/settings/oauth-status-banner'
@@ -8,9 +9,13 @@ export default async function SettingsPage({
 }: {
   searchParams: Promise<{ success?: string; error?: string }>
 }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  const { success, error } = await searchParams
+  // getUser() is React-cached — layout.tsx already called it for this
+  // request, so this costs no extra Supabase auth round-trip.
+  const [supabase, user, { success, error }] = await Promise.all([
+    createClient(),
+    getUser(),
+    searchParams,
+  ])
 
   const { data: stores } = await supabase
     .from('stores')

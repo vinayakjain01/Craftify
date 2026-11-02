@@ -195,12 +195,11 @@ export async function collectFilteredProductIds(
  * pattern already used for the stale-variant reconciliation in
  * shopify-sync.ts's replaceProductVariants.
  */
-export async function findUncoveredInStockVariants(
+async function fetchAllInStockVariants(
   storeId: string,
   supabase: SupabaseClient
 ): Promise<Array<{ id: string; product_id: string }>> {
   const PAGE = 1000
-
   const inStock: Array<{ id: string; product_id: string }> = []
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await supabase
@@ -216,8 +215,14 @@ export async function findUncoveredInStockVariants(
     inStock.push(...(data as any[]).map(v => ({ id: v.id, product_id: v.product_id })))
     if (data.length < PAGE) break
   }
-  if (inStock.length === 0) return []
+  return inStock
+}
 
+async function fetchCoveredVariantIds(
+  storeId: string,
+  supabase: SupabaseClient
+): Promise<Set<string>> {
+  const PAGE = 1000
   const covered = new Set<string>()
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await supabase
@@ -232,6 +237,22 @@ export async function findUncoveredInStockVariants(
     for (const row of data as any[]) covered.add(row.variant_id)
     if (data.length < PAGE) break
   }
+  return covered
+}
+
+export async function findUncoveredInStockVariants(
+  storeId: string,
+  supabase: SupabaseClient
+): Promise<Array<{ id: string; product_id: string }>> {
+  // Independent of each other — run concurrently rather than one after the
+  // other. This is called on every Dashboard page load; for a non-trivial
+  // catalog that used to mean two sequential rounds of paginated queries
+  // back to back.
+  const [inStock, covered] = await Promise.all([
+    fetchAllInStockVariants(storeId, supabase),
+    fetchCoveredVariantIds(storeId, supabase),
+  ])
+  if (inStock.length === 0) return []
 
   return inStock.filter(v => !covered.has(v.id))
 }

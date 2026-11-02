@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { getUser } from '@/lib/supabase/get-user'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -11,9 +12,11 @@ export default async function ProductDetailPage({
 }: {
   params: Promise<{ productId: string }>
 }) {
-  const { productId } = await params
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const [{ productId }, supabase, user] = await Promise.all([
+    params,
+    createClient(),
+    getUser(), // React-cached — no extra Supabase auth round-trip
+  ])
 
   const { data: product } = await supabase
     .from('products')

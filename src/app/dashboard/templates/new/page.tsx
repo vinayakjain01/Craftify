@@ -1,10 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
+import { getUser } from '@/lib/supabase/get-user'
 import { getActiveStore } from '@/lib/active-store'
 import { TemplateBuilderClient } from '@/components/builder/template-builder-client'
 
 export default async function NewTemplatePage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const [supabase, user] = await Promise.all([createClient(), getUser()])
 
   const [{ data: categories }, { activeStoreId }] = await Promise.all([
     supabase
@@ -12,7 +12,7 @@ export default async function NewTemplatePage() {
       .select('*')
       .eq('user_id', user!.id)
       .order('name'),
-    getActiveStore(),
+    getActiveStore(), // React-cached getUser() internally — no extra round-trip
   ])
 
   let previewProducts: any[] = []
