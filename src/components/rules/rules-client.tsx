@@ -11,7 +11,7 @@
  * That is the opposite of the pre-v2 behaviour, so the list is ordered — and
  * labelled — to make the evaluation order unambiguous.
  */
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { shopifyFetch } from '@/lib/shopify-token'
 import { Button } from '@/components/ui/button'
@@ -74,6 +74,11 @@ interface Props {
    * arrives here via a template's "Set up a rule" link
    * (/dashboard/rules?templateId=...) rather than navigating in directly. */
   initialTemplateId?: string
+  /** The active store's rules, fetched server-side in the same request as
+   * everything else on this page. Renders immediately instead of showing
+   * "Loading..." for a full extra client round-trip (plus that route's own
+   * separate auth check) after the page itself has already painted. */
+  initialRules: Rule[]
 }
 
 // "All products" first: it's the simplest, most common rule (one template for
@@ -82,10 +87,14 @@ interface Props {
 // switch off "Tag" first.
 const emptyCondition = (): RuleCondition => ({ field: 'all_products', operator: 'is', value: '' })
 
-export function RulesClient({ stores, templates, hasGeneratedCreatives, initialTemplateId }: Props) {
+export function RulesClient({ stores, templates, hasGeneratedCreatives, initialTemplateId, initialRules }: Props) {
   const [selectedStore, setSelectedStore] = useState(stores[0]?.id || '')
-  const [rules, setRules] = useState<Rule[]>([])
-  const [loading, setLoading] = useState(true)
+  const [rules, setRules] = useState<Rule[]>(initialRules)
+  const [loading, setLoading] = useState(false)
+  // Skips the mount-time client fetch — initialRules already has this
+  // store's data as of server-render time. Any later change to
+  // selectedStore (store switcher) still fetches normally.
+  const skipNextFetch = useRef(true)
 
   // New rule form
   const [name, setName] = useState('')
@@ -123,8 +132,18 @@ export function RulesClient({ stores, templates, hasGeneratedCreatives, initialT
    */
   useEffect(() => {
     if (!selectedStore) return
+    if (skipNextFetch.current) {
+      skipNextFetch.current = false
+      return
+    }
     let cancelled = false
 
+    // No synchronous setLoading(true) here on purpose — see the comment on
+    // fetchRules() above: a set-state call directly in an effect body (not
+    // inside the async callback) is a synchronous set-state-in-effect, which
+    // the React Compiler rejects. This path is store-switching, not the
+    // common case, so a brief stale-data flash until the response lands is
+    // an acceptable trade-off for not reintroducing that violation.
     shopifyFetch(`/api/rules?storeId=${selectedStore}`)
       .then(res => res.json())
       .then(data => {

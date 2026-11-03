@@ -61,16 +61,32 @@ function variantLabel(v: Creative['product_variants']): string | null {
   return opts.length ? opts.join(' / ') : null
 }
 
-export function CreativesClient({ stores }: { stores: { id: string; shop_name: string; shop_domain: string }[] }) {
+interface Props {
+  stores: { id: string; shop_name: string; shop_domain: string }[]
+  /** The active store's first page of "catalog" creatives, fetched
+   * server-side in the same request as the rest of the page — renders
+   * immediately instead of waiting on a client round-trip (direct-to-
+   * Supabase, but still a full extra request) after the page already
+   * painted. Must match PER_PAGE/DEFAULT_ASSET_TYPE below exactly, since
+   * that's the mount-time state this is standing in for. */
+  initialCreatives: Creative[]
+  initialTotalCreatives: number
+}
+
+export function CreativesClient({ stores, initialCreatives, initialTotalCreatives }: Props) {
   const [selectedStore, setSelectedStore] = useState(stores[0]?.id || '')
-  const [creatives, setCreatives] = useState<Creative[]>([])
+  const [creatives, setCreatives] = useState<Creative[]>(initialCreatives)
   const [loading, setLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [stopping, setStopping] = useState(false)
   const [genResult, setGenResult] = useState<string | null>(null)
   const [batchProgress, setBatchProgress] = useState<BatchCounts | null>(null)
   const [page, setPage] = useState(0)
-  const [totalCreatives, setTotalCreatives] = useState(0)
+  const [totalCreatives, setTotalCreatives] = useState(initialTotalCreatives)
+  // Skips the mount-time reactive fetch below — initialCreatives already has
+  // page 0 of the default ('catalog') asset type for this store as of
+  // server-render time. Switching store/page/tab still fetches normally.
+  const skipNextCreativesFetch = useRef(true)
 
   // ── Generate Scope ─────────────────────────────────────────────────────────
   const [variantScope, setVariantScope] = useState<'all' | 'specific'>('all')
@@ -152,6 +168,10 @@ export function CreativesClient({ stores }: { stores: { id: string; shop_name: s
   // user has since switched away from cannot overwrite the newer one's data.
   useEffect(() => {
     if (!selectedStore) return
+    if (skipNextCreativesFetch.current) {
+      skipNextCreativesFetch.current = false
+      return
+    }
     let cancelled = false
 
     ;(async () => {
