@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useCallback } from 'react'
+import { useRef, useCallback, useState, useEffect } from 'react'
 import { useBuilderStore } from '@/stores/builder-store'
 import {
   Layer, TextLayer, ImageLayer, RectangleLayer, BadgeLayer,
@@ -172,7 +172,9 @@ function AiExtendImageLayer({
     )
   }
   if (extendedUrl) {
-    return <img src={extendedUrl} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
+    // Keyed by url so a genuinely different result (new product/dimensions)
+    // mounts a fresh instance instead of carrying over stale retry state.
+    return <ExtendedResultImage key={extendedUrl} url={extendedUrl} />
   }
   if (imageUrl) {
     return <img src={imageUrl} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none', opacity: 0.5 }} />
@@ -181,6 +183,72 @@ function AiExtendImageLayer({
     <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#9ca3af' }}>
       AI Extend
     </div>
+  )
+}
+
+// The server only caches/returns extendedUrl once a HEAD request against it
+// confirms 200 (see waitForCloudinaryAsset in src/lib/image-extend/index.ts),
+// but that check happens from Vercel's region. The browser's own GET to the
+// same URL can still land on a different, not-yet-synced Cloudinary CDN edge
+// and get a transient 423 — which Chrome reports as "blocked by CORB" for an
+// <img> tag (confirmed via DevTools: the blocked resource was this exact
+// extend-results/<hash>.jpg file) and then never retries on its own, leaving
+// the canvas permanently blank until something forces a brand new <img> load
+// (e.g. switching Fit away and back). Retry the load client-side instead of
+// waiting on a full remount.
+const EXTENDED_IMAGE_RETRY_DELAYS_MS = [1500, 3000, 5000, 8000]
+
+function ExtendedResultImage({ url }: { url: string }) {
+  const [attempt, setAttempt] = useState(0)
+  const [failed, setFailed] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Component is keyed by url at the call site, so a new url always means a
+  // fresh mount — no need to reset state here, just clear the timer on unmount.
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
+  }, [])
+
+  function handleError() {
+    if (attempt >= EXTENDED_IMAGE_RETRY_DELAYS_MS.length) {
+      setFailed(true)
+      return
+    }
+    const delay = EXTENDED_IMAGE_RETRY_DELAYS_MS[attempt]
+    timerRef.current = setTimeout(() => setAttempt(a => a + 1), delay)
+  }
+
+  if (failed) {
+    return (
+      <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', gap: 4, padding: 8, background: 'rgba(239,68,68,0.05)' }}>
+        <Wand2 style={{ width: 14, height: 14, color: '#ef4444' }} />
+        <span style={{ fontSize: 10, color: '#ef4444', textAlign: 'center' }}>Image still not ready — try again</span>
+        <button
+          onClick={() => { setAttempt(0); setFailed(false) }}
+          style={{ fontSize: 10, color: '#6b7280', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer' }}
+        >
+          Retry
+        </button>
+      </div>
+    )
+  }
+
+  // Cache-bust each retry attempt — the browser (and any intermediate CDN
+  // cache) must not just hand back its own failed response again.
+  const src = attempt === 0 ? url : `${url}${url.includes('?') ? '&' : '?'}retry=${attempt}`
+
+  return (
+    <img
+      key={`${url}:${attempt}`}
+      src={src}
+      alt=""
+      draggable={false}
+      onError={handleError}
+      style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
+    />
   )
 }
 
