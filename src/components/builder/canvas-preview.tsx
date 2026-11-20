@@ -258,11 +258,15 @@ function ExtendedResultImage({ url }: { url: string }) {
       />
       {/* Shown instead of a blank/broken frame while a CDN-edge retry is in
           flight — most retries resolve within one or two attempts (under a
-          second), so this is brief in practice, not a real loading state. */}
+          second), so this is brief in practice, not a real loading state.
+          Must be fully OPAQUE (not the usual faint tint) — this sits on top
+          of the actual <img>, and a translucent overlay still lets the
+          browser's native broken-image glyph show through underneath it
+          for a frame whenever that attempt 423s. */}
       {!loaded && (
         <div style={{
           position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
-          justifyContent: 'center', background: 'rgba(0,0,0,0.04)', pointerEvents: 'none',
+          justifyContent: 'center', background: '#f3f4f6', pointerEvents: 'none',
         }}>
           <Loader2 style={{ width: 16, height: 16, color: 'var(--primary)', animation: 'spin 1s linear infinite' }} />
         </div>

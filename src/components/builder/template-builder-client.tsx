@@ -3,7 +3,7 @@
 import { shopifyFetch } from '@/lib/shopify-token'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useBuilderStore } from '@/stores/builder-store'
+import { useBuilderStore, PreviewProduct } from '@/stores/builder-store'
 import { CanvasPreview } from './canvas-preview'
 import { LayerPanel } from './layer-panel'
 import { LayerProperties } from './layer-properties'
@@ -44,7 +44,10 @@ type RightPanelTab = 'layers' | 'properties' | 'ai'
 
 export function TemplateBuilderClient({ template, categories, previewProducts = [], storeId }: Props) {
   const router = useRouter()
-  const { canvasData, loadTemplate, isDirty, resetDirty, setAspectRatio, selectedLayerId } = useBuilderStore()
+  const {
+    canvasData, loadTemplate, isDirty, resetDirty, setAspectRatio, selectedLayerId,
+    previewProduct, setPreviewProduct,
+  } = useBuilderStore()
   const [name, setName] = useState(template?.name || 'Untitled template')
   const [categoryId, setCategoryId] = useState(template?.category_id || 'none')
   const [assetType, setAssetType] = useState<AssetType>(template?.asset_type ?? 'catalog')
@@ -98,6 +101,27 @@ export function TemplateBuilderClient({ template, categories, previewProducts = 
       })
     }
   }, [template])
+
+  // Default to the first product in the store's catalog so the canvas shows
+  // a real image right away instead of the empty "Preview with product"
+  // placeholder — matches the picker's own primary-image fallback logic
+  // (product-preview-selector.tsx's selectProduct). Guarded by `previewProduct`
+  // so it only fires once and never overrides a product the user already picked.
+  useEffect(() => {
+    if (previewProduct || previewProducts.length === 0) return
+    const first = previewProducts[0]
+    const primaryImage = first.product_images?.find((i: { is_primary: boolean }) => i.is_primary) || first.product_images?.[0]
+    const preview: PreviewProduct = {
+      title: first.title,
+      price: first.price,
+      compare_at_price: first.compare_at_price,
+      vendor: first.vendor,
+      product_type: first.product_type,
+      imageUrl: primaryImage?.src || null,
+    }
+    setPreviewProduct(preview)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewProducts])
 
   async function handleSave() {
     setSaving(true)
