@@ -45,15 +45,25 @@ cloudinary.config({
 
 // ─── Cache key ────────────────────────────────────────────────────────────────
 
-/** Cache key for a centered extend result — source URL + target dimensions. */
+/**
+ * Cache key for a centered extend result — source URL + target dimensions.
+ *
+ * Includes the active Cloudinary cloud name so rotating Cloudinary
+ * credentials naturally invalidates every previously-cached result instead
+ * of silently serving back a dead URL under an account that no longer
+ * exists — confirmed happening in practice: cached rows from a prior cloud
+ * name were still being returned as cache hits after switching accounts,
+ * each one a permanently broken image with no error anywhere.
+ */
 export function getExtendCacheKey(
   sourceUrl: string,
   targetWidth: number,
   targetHeight: number
 ): string {
+  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || ''
   return crypto
     .createHash('sha256')
-    .update(`${sourceUrl}|${targetWidth}|${targetHeight}|ai_extend|cloudinary`)
+    .update(`${sourceUrl}|${targetWidth}|${targetHeight}|ai_extend|cloudinary|${cloudName}`)
     .digest('hex')
 }
 
@@ -328,7 +338,12 @@ export async function invalidateExtendCache(
 //
 // The cache key includes the offset so each position combo is cached separately.
 
-/** Cache key for a positioned extend result — includes the render offset so each position combo caches separately. */
+/**
+ * Cache key for a positioned extend result — includes the render offset so
+ * each position combo caches separately, and the active Cloudinary cloud
+ * name so rotating Cloudinary credentials naturally invalidates every
+ * previously-cached result (see getExtendCacheKey's comment for why).
+ */
 export function getPositionedExtendCacheKey(
   sourceUrl: string,
   targetWidth: number,
@@ -338,9 +353,10 @@ export function getPositionedExtendCacheKey(
   renderedW: number,
   renderedH: number
 ): string {
+  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || ''
   return crypto
     .createHash('sha256')
-    .update(`${sourceUrl}|${targetWidth}|${targetHeight}|${offsetX}|${offsetY}|${renderedW}|${renderedH}|positioned_extend_v1`)
+    .update(`${sourceUrl}|${targetWidth}|${targetHeight}|${offsetX}|${offsetY}|${renderedW}|${renderedH}|positioned_extend_v1|${cloudName}`)
     .digest('hex')
 }
 

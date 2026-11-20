@@ -80,9 +80,19 @@ function getFallbackProviders(): BackgroundRemovalProvider[] {
 
 // ─── Cache key ────────────────────────────────────────────────────────────────
 
-/** Cache key for a source image's transparent-cutout result (sha256 of the URL). */
+/**
+ * Cache key for a source image's transparent-cutout result.
+ *
+ * Includes the active Cloudinary cloud name so rotating Cloudinary
+ * credentials naturally invalidates every previously-cached result instead
+ * of silently serving back a dead URL under an account that no longer
+ * exists — confirmed happening in practice: cached rows from two prior
+ * cloud names were still being returned as cache hits after switching
+ * accounts, each one a permanently broken image with no error anywhere.
+ */
 export function getCacheKey(imageUrl: string): string {
-  return crypto.createHash('sha256').update(imageUrl).digest('hex')
+  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || ''
+  return crypto.createHash('sha256').update(`${imageUrl}|${cloudName}`).digest('hex')
 }
 
 // ─── Main service function ───────────────────────────────────────────────────

@@ -53,9 +53,17 @@ cloudinary.config({
 
 // ─── Cache key ────────────────────────────────────────────────────────────────
 
-/** Cache key for a source image's reconstructed background (sha256, salted so it can't collide with the plain bg-removal cache key). */
+/**
+ * Cache key for a source image's reconstructed background (sha256, salted
+ * so it can't collide with the plain bg-removal cache key). Includes the
+ * active Cloudinary cloud name so rotating Cloudinary credentials naturally
+ * invalidates every previously-cached result instead of silently serving
+ * back a dead URL under an account that no longer exists — see the same fix
+ * in image-extend's getExtendCacheKey for why this matters.
+ */
 export function getReconstructionCacheKey(sourceUrl: string): string {
-  return crypto.createHash('sha256').update(`${sourceUrl}|gen_remove|v1`).digest('hex')
+  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || ''
+  return crypto.createHash('sha256').update(`${sourceUrl}|gen_remove|v1|${cloudName}`).digest('hex')
 }
 
 // ─── Async eager-transform polling ────────────────────────────────────────────
