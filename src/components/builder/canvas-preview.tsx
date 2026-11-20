@@ -196,10 +196,15 @@ function AiExtendImageLayer({
 // the canvas permanently blank until something forces a brand new <img> load
 // (e.g. switching Fit away and back). Retry the load client-side instead of
 // waiting on a full remount.
-const EXTENDED_IMAGE_RETRY_DELAYS_MS = [1500, 3000, 5000, 8000]
+//
+// Delays start fast (the edge is often only a few hundred ms behind) and
+// back off, so the common case resolves almost immediately instead of
+// always waiting out a fixed delay before the first retry.
+const EXTENDED_IMAGE_RETRY_DELAYS_MS = [300, 700, 1200, 2000, 3500, 5000]
 
 function ExtendedResultImage({ url }: { url: string }) {
   const [attempt, setAttempt] = useState(0)
+  const [loaded, setLoaded] = useState(false)
   const [failed, setFailed] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -227,7 +232,7 @@ function ExtendedResultImage({ url }: { url: string }) {
         <Wand2 style={{ width: 14, height: 14, color: '#ef4444' }} />
         <span style={{ fontSize: 10, color: '#ef4444', textAlign: 'center' }}>Image still not ready — try again</span>
         <button
-          onClick={() => { setAttempt(0); setFailed(false) }}
+          onClick={() => { setAttempt(0); setLoaded(false); setFailed(false) }}
           style={{ fontSize: 10, color: '#6b7280', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer' }}
         >
           Retry
@@ -241,14 +246,28 @@ function ExtendedResultImage({ url }: { url: string }) {
   const src = attempt === 0 ? url : `${url}${url.includes('?') ? '&' : '?'}retry=${attempt}`
 
   return (
-    <img
-      key={`${url}:${attempt}`}
-      src={src}
-      alt=""
-      draggable={false}
-      onError={handleError}
-      style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
-    />
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <img
+        key={`${url}:${attempt}`}
+        src={src}
+        alt=""
+        draggable={false}
+        onLoad={() => setLoaded(true)}
+        onError={handleError}
+        style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
+      />
+      {/* Shown instead of a blank/broken frame while a CDN-edge retry is in
+          flight — most retries resolve within one or two attempts (under a
+          second), so this is brief in practice, not a real loading state. */}
+      {!loaded && (
+        <div style={{
+          position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
+          justifyContent: 'center', background: 'rgba(0,0,0,0.04)', pointerEvents: 'none',
+        }}>
+          <Loader2 style={{ width: 16, height: 16, color: 'var(--primary)', animation: 'spin 1s linear infinite' }} />
+        </div>
+      )}
+    </div>
   )
 }
 
